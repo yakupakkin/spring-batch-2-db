@@ -21,8 +21,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
-import com.example.project.JobCompletionNotificationListener;
-import com.example.project.CarItemProcessor;
+import com.example.project.service.JobCompletionNotificationListener;
+import com.example.project.service.CarItemProcessor;
 
 @Configuration
 @EnableBatchProcessing

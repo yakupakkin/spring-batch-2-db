@@ -1,4 +1,4 @@
-package com.example.project;
+package com.example.project.service;
 
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.JobExecution;
