@@ -37,32 +37,17 @@ public class BatchConfiguration {
 
     @Autowired
     public StepBuilderFactory stepBuilderFactory;
+
+    @Autowired
+    JobCompletionNotificationListener listener;
     @Autowired
     JobLauncher jobLauncher;
     @Value("${file.input}")
     private String fileInput;
     DataSource dataSource;
-    @Autowired
-    JobCompletionNotificationListener listener;
 
-    @Bean
-    public FlatFileItemReader<Car> reader() {
-        BeanWrapperFieldSetMapper<Car> beanWrapperFieldSetMapper = new BeanWrapperFieldSetMapper<>();
-        beanWrapperFieldSetMapper.setTargetType(Car.class);
-        return new FlatFileItemReaderBuilder<Car>().name("carItemReader")
-                .resource(new ClassPathResource(fileInput)).delimited().names("brand", "model", "color")
-                .fieldSetMapper(beanWrapperFieldSetMapper).build();
-    }
 
-    @Bean
-    public JdbcBatchItemWriter<Car> writer(DataSource dataSource) {
-        return new JdbcBatchItemWriterBuilder<Car>()
-                .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-                .sql("INSERT INTO CAR (brand, model, color) VALUES (:brand, :model, :color)")
-                .dataSource(dataSource).build();
-    }
-
-    @Scheduled(cron = "0 */1 * * * ?")
+    @Scheduled(cron = "0 */5 * * * *")
     public void perform() throws Exception {
         JobParameters params = new JobParametersBuilder()
                 .addString("JobID", String.valueOf(System.currentTimeMillis()))
@@ -75,17 +60,42 @@ public class BatchConfiguration {
         return jobBuilderFactory.get("importUserJob").incrementer(new RunIdIncrementer())
                 .listener(listener)
                 .flow(step1())
-                .end().build();
+                .end()
+                .build();
     }
 
     @Bean
     public Step step1() {
-        return stepBuilderFactory.get("step1").<Car, Car>chunk(100).reader(reader()).processor(processor())
-                .writer(writer(dataSource)).build();
+        return stepBuilderFactory.get("step1").<Car, Car>chunk(100)
+                .reader(reader())
+                .processor(processor())
+                .writer(writer(dataSource))
+                .build();
     }
-
+    @Bean
+    public FlatFileItemReader<Car> reader() {
+        BeanWrapperFieldSetMapper<Car> beanWrapperFieldSetMapper = new BeanWrapperFieldSetMapper<>();
+        beanWrapperFieldSetMapper.setTargetType(Car.class);
+        return new FlatFileItemReaderBuilder<Car>()
+                .name("carItemReader")
+                .resource(new ClassPathResource(fileInput))
+                .delimited()
+                .names("brand", "model", "color")
+                .fieldSetMapper(beanWrapperFieldSetMapper)
+                .build();
+    }
     @Bean
     public CarItemProcessor processor() {
         return new CarItemProcessor();
     }
+
+    @Bean
+    public JdbcBatchItemWriter<Car> writer(DataSource dataSource) {
+        return new JdbcBatchItemWriterBuilder<Car>()
+                .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
+                .sql("INSERT INTO CAR (brand, model, color) VALUES (:brand, :model, :color)")
+                .dataSource(dataSource)
+                .build();
+    }
+
 }
