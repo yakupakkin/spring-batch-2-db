@@ -2,7 +2,6 @@ package com.example.project.configuration;
 
 import javax.sql.DataSource;
 
-import com.example.project.pojo.Car;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
@@ -12,42 +11,43 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
-import org.springframework.batch.item.file.FlatFileItemReader;
-import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
-
-import com.example.project.service.JobCompletionNotificationListener;
-import com.example.project.service.CarItemProcessor;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.scheduling.annotation.Scheduled;
+
+import com.example.project.pojo.Car;
+import com.example.project.service.CarItemProcessor;
+import com.example.project.service.JobCompletionNotificationListener;
+
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableBatchProcessing
+@RequiredArgsConstructor
 public class BatchConfiguration {
 
-    @Autowired
-    public JobBuilderFactory jobBuilderFactory;
+	final JobBuilderFactory jobBuilderFactory;
 
-    @Autowired
-    public StepBuilderFactory stepBuilderFactory;
+	final StepBuilderFactory stepBuilderFactory;
 
-    @Autowired
-    JobCompletionNotificationListener listener;
-    @Autowired
-    JobLauncher jobLauncher;
-    @Value("${file.input}")
-    private String fileInput;
-    DataSource dataSource;
+	final JobCompletionNotificationListener listener;
 
+	final JobLauncher jobLauncher;
 
-    @Scheduled(cron = "0 */5 * * * *")
+	@Qualifier("primaryDataSource")
+	final DataSource primaryDataSource;
+
+	@Qualifier("secondaryDataSource")
+	final DataSource secondaryDataSource;
+
+	@Scheduled(cron = "0 */2 * * * *")
     public void perform() throws Exception {
         JobParameters params = new JobParametersBuilder()
                 .addString("JobID", String.valueOf(System.currentTimeMillis()))
@@ -67,34 +67,31 @@ public class BatchConfiguration {
     @Bean
     public Step step1() {
         return stepBuilderFactory.get("step1").<Car, Car>chunk(100)
-                .reader(reader())
+				.reader(reader())
                 .processor(processor())
-                .writer(writer(dataSource))
+				.writer(writer())
                 .build();
     }
-    @Bean
-    public FlatFileItemReader<Car> reader() {
-        BeanWrapperFieldSetMapper<Car> beanWrapperFieldSetMapper = new BeanWrapperFieldSetMapper<>();
-        beanWrapperFieldSetMapper.setTargetType(Car.class);
-        return new FlatFileItemReaderBuilder<Car>()
-                .name("carItemReader")
-                .resource(new ClassPathResource(fileInput))
-                .delimited()
-                .names("brand", "model", "color")
-                .fieldSetMapper(beanWrapperFieldSetMapper)
-                .build();
-    }
+
+	private static final String QUERY_FIND_CARS = "SELECT id,brand,model,color FROM car";
+
+	@Bean
+	public ItemReader<Car> reader() {
+		return new JdbcCursorItemReaderBuilder<Car>().name("cursorItemReader").dataSource(primaryDataSource)
+				.sql(QUERY_FIND_CARS).rowMapper(new BeanPropertyRowMapper<>(Car.class)).build();
+	}
+
     @Bean
     public CarItemProcessor processor() {
         return new CarItemProcessor();
     }
 
     @Bean
-    public JdbcBatchItemWriter<Car> writer(DataSource dataSource) {
+	public JdbcBatchItemWriter<Car> writer() {
         return new JdbcBatchItemWriterBuilder<Car>()
                 .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-                .sql("INSERT INTO CAR (brand, model, color) VALUES (:brand, :model, :color)")
-                .dataSource(dataSource)
+				.sql("INSERT INTO CAR (id,brand, model, color) VALUES (:id,:brand, :model, :color)")
+				.dataSource(secondaryDataSource)
                 .build();
     }
 

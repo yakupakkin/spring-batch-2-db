@@ -6,9 +6,14 @@ server:
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/postgres
+    jdbc-url: jdbc:postgresql://localhost:5432/postgres
     username: postgres
     password: root
+  datasource2:
+    driver-class-name: org.postgresql.Driver
+    jdbc-url: jdbc:postgresql://localhost:5432/testdb
+    username: postgres
+    password: root    
   jpa:
     hibernate:
       ddl-auto: create # When you launch the application for the first time - switch "none" at "create"
@@ -19,6 +24,8 @@ spring:
     generate-ddl: true
   batch:
     jdbc:
-      initialize-schema: always
+      initialize-schema: never
     job:
       enabled: false
+  main:
+    allow-bean-definition-overriding: true    
